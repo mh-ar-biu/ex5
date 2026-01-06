@@ -42,7 +42,7 @@ void freeShow(TVShow *show);
 void freeAll();
 
 TVShow *findShow(char *name);
-Season *findSeason(TVShow *show, char *name);
+Season *findSeason(TVShow*, char*);
 Episode *findEpisode(Season *season, char *name);
 
 void initDatabase(); // Initialize 1x1 database
@@ -53,7 +53,9 @@ void shiftDatabase(int, int); // Move all elements forward after selected index
 
 int showAlreadyExists(char *); // Checks if a show of the same name is present in the database
 int seasonAlreadyExists(TVShow *, char *); // Same but seasons
+int episodeAlreadyExists(Season *, char *);
 int showCount(); // Return current number of shows
+int isLengthValid(char *); // Checks if the format of episode length is correct
 
 // Create/remove functions handle actually creating and removing structs from the array
 // The built-in add/delete functions handle interaction with the user
@@ -62,6 +64,7 @@ void createShow(char *);
 void addSeason();
 void createSeason(TVShow *, char *, int);
 void addEpisode();
+void createEpisode(Season *, char *, char *, int);
 
 void deleteShow();
 void deleteSeason();
@@ -261,8 +264,7 @@ int showAlreadyExists(char *name) {
     for (int i = 0; i < dbSize; i++) {
         for (int j = 0; j < dbSize; j++) {
             if (database[i][j] != NULL) {
-                if(compareStrings(database[i][j]->name, name) == 3) {
-                    printf("Show already exists.\n");
+                if(compareStrings(database[i][j]->name, name) == 3) { 
                     return 1;
                 }
             }
@@ -296,7 +298,10 @@ void createShow(char *name) {
     // Database is not large enough -> increase the size of rows and columns by one
     // Otherwise -> Add it to the correct place
     if (database == NULL) initDatabase();
-    if (showAlreadyExists(name)) return;
+    if (showAlreadyExists(name)) {
+		printf("Show already exists.\n");
+		return;
+	}
     else if (database[dbSize - 1][dbSize - 1] != NULL) enlargeDatabase();
     for (int i = 0; i < dbSize; i++) {
         for (int j = 0; j < dbSize; j++) {
@@ -333,6 +338,16 @@ TVShow *findShow(char *name) {
 void addSeason() {
     char *showName;
     char *seasonName;
+	showName = malloc(1);
+	if (showName == NULL) {
+		printf("Malloc error (showName), exiting...\n");
+		exit(1);
+	}
+	seasonName = malloc(1);
+	if (seasonName == NULL) {
+		printf("Malloc error (seasonName), exiting...\n");
+		exit(1);
+	}
     int pos;
     printf("Enter the name of the show:\n");
     readInputChars(&showName);
@@ -357,8 +372,8 @@ void addSeason() {
 int seasonAlreadyExists(TVShow *show, char *name) {
     Season *season;
     season = show->seasons;
-    while(season != NULL) {
-        if(compareStrings(season->name, name) == 3) return 1;
+    while (season != NULL) {
+        if (compareStrings(season->name, name) == 3) return 1;
         season = season->next;
     }
     return 0;
@@ -370,30 +385,168 @@ void createSeason(TVShow *show,char *seasonName, int pos) {
         printf("Malloc error (create season), exiting...\n");
         exit(1);
     }
-    if ((season->name = malloc(sizeof(strlen(seasonName) + 1))) == NULL) {
+    if ((season->name = malloc(strlen(seasonName) + 1)) == NULL) {
         printf("Malloc error (create season name), exiting...\n");
         exit(1);
     }
+	// Setting to null is probably not needed but it's easier to compute in my head this way
     strcpy(season->name, seasonName);
     season->episodes = NULL;
     season->next = NULL;
-    if (show->seasons == NULL) {
+    if (show->seasons == NULL) { // if empty, set to head node
         show->seasons = season;
         return;
     }
-    Season *before_pos_ptr;
-    before_pos_ptr = show->seasons;
+	if (pos == 0) { // if position 0, set to head
+		Season* temp = show->seasons;
+		show->seasons = season;
+		season->next = temp;
+		return;
+	}
+    Season *beforePosPtr; // otherwise set it to the correct place
+    beforePosPtr = show->seasons;
     for (int i = 0; i < pos - 1; i++) {
-        if (before_pos_ptr->next == NULL) break;
-        before_pos_ptr = before_pos_ptr->next;
+        if (beforePosPtr->next == NULL) break;
+        beforePosPtr = beforePosPtr->next;
     }
-    season->next = before_pos_ptr->next;
-    before_pos_ptr->next = season;
-    
+    season->next = beforePosPtr->next;
+    beforePosPtr->next = season;
+    return;
 }
 
 void addEpisode() {
+	char *showName, *seasonName, *episodeName, *length;
+	int pos;
+	if ((showName = malloc(1)) == NULL) {
+		printf("Malloc error (showName), exiting...\n");
+		exit(1);
+	}
+	if ((seasonName = malloc(1)) == NULL) {
+		printf("Malloc error (seasonName), exiting...\n");
+		exit(1);
+	}
+	if ((episodeName = malloc(1)) == NULL) {
+		printf("Malloc error (episodeName), exiting...\n");
+		exit(1);
+	}
+	if ((length = malloc(1)) == NULL) {
+		printf("Malloc error (length), exiting...\n");
+		exit(1);
+	}
+	printf("Enter the name of the show:\n");
+	readInputChars(&showName);
+	if (!showAlreadyExists(showName)) {
+		printf("Show not found.\n");
+		return; 
+	}
+	TVShow *show = findShow(showName);
+	printf("Enter the name of the season:\n");
+	readInputChars(&seasonName);
+	if (!seasonAlreadyExists(show, seasonName)) {
+		printf("Season not found.\n");
+		return;
+	}
+	Season *season = findSeason(show, seasonName);
+	printf("Enter the name of the episode:\n");
+	readInputChars(&episodeName);
+	if (episodeAlreadyExists(season, episodeName)) {
+		printf("Episode already exists.\n");
+		return;
+	}
+	printf("Enter the length (xx:xx:xx):\n");
+	readInputChars(&length);
+	while (!isLengthValid(length)) {
+		printf("Invalid length, enter again:\n");
+		free(length);
+		if ((length = malloc(1)) == NULL) {
+			printf("Malloc error (length), exiting...\n");
+			exit(1);
+		}
+		readInputChars(&length);
+	}
+	printf("Enter the position:\n");
+	scanf("%d", &pos);
+	createEpisode(season, episodeName, length, pos);
+	free(showName);
+	free(seasonName);
+	free(episodeName);
+	free(length);
+	return;
+}
+
+void createEpisode(Season *season, char *name, char *length, int pos) { 
+	// This whole fucntion is just an edited copy of createSeason()
+	// Comments not required
+	Episode *episode;
+    if ((episode = malloc(sizeof(Episode))) == NULL) {
+        printf("Malloc error (create episode), exiting...\n");
+        exit(1);
+    }
+    if ((episode->name = malloc(strlen(name) + 1)) == NULL) {
+        printf("Malloc error (create episode name), exiting...\n");
+        exit(1);
+    }
+	if ((episode->length = malloc(strlen(length) + 1)) == NULL) {
+        printf("Malloc error (create episode length), exiting...\n");
+        exit(1);
+    }
+    strcpy(episode->name, name);
+	strcpy(episode->length, length);
+    episode->next = NULL;
+    if (season->episodes == NULL) { // if empty, set to head node
+        season->episodes = episode;
+        return;
+    }
+	if (pos == 0) { // if position 0, set to head
+		Episode* temp = season->episodes;
+		season->episodes = episode;
+		episode->next = temp;
+		return;
+	}
+    Episode *beforePosPtr; // otherwise set it to the correct place
+    beforePosPtr = season->episodes;
+    for (int i = 0; i < pos - 1; i++) {
+        if (beforePosPtr->next == NULL) break;
+        beforePosPtr = beforePosPtr->next;
+    }
+    episode->next = beforePosPtr->next;
+    beforePosPtr->next = episode;
     return;
+}
+
+Season* findSeason(TVShow * show, char *name) {
+	Season *season = show->seasons;
+    while (season != NULL) {
+        if (compareStrings(season->name, name) == 3) return season;
+        season = season->next;
+    }
+   printf("ERROR: could not find season, did you forget to run seasonAlreadyExists() first?\n"); 
+	return NULL;
+}
+
+int episodeAlreadyExists(Season *season, char *name) {
+    Episode *episode;
+    episode = season->episodes;
+    while (episode != NULL) {
+        if (compareStrings(episode->name, name) == 3) return 1;
+        episode = episode->next;
+    }
+    return 0;
+}
+
+int isLengthValid(char *length) {
+	if (strlen(length) != 8) return 0;
+	// This could be a for loop with skips
+	// Howewer this is more readable even if it's repeating
+	if ('0' >= length[0] && length[0] >= '9') return 0;
+	if ('0' >= length[1] && length[1] >= '9') return 0;
+	if (length[2] != ':') return 0;
+	if ('0' >= length[3] && length[3] >= '5') return 0;
+	if ('0' >= length[4] && length[4] >= '9') return 0;
+	if (length[5] != ':') return 0;
+	if ('0' >= length[6] && length[6] >= '5') return 0;
+	if ('0' >= length[7] && length[7] >= '9') return 0;
+	return 1;
 }
 
 void deleteShow() {
@@ -413,7 +566,16 @@ void printShow() {
     TVShow *show;
     Season *season;
     printf("Enter the name of the show:\n");
+	name = malloc(1);
+	if(name == NULL) {
+		printf("Malloc error (name), exiting...\n");
+		return;
+	}
     readInputChars(&name);
+	if (!showAlreadyExists(name)) {
+		printf("Show not found.\n");
+		return;
+	}
     show = findShow(name);
     printf("Name: %s\n", show->name);
     printf("Seasons:\n");
